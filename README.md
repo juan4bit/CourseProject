@@ -1,3 +1,13 @@
-# CourseProject
+# Influence Ranker
 
-Please fork this repository and paste the github link of your fork on Microsoft CMT. Detailed instructions are on Coursera under Week 1: Course Project Overview/Week 9 Activities.
+## Table of Contents
+
+<!-- vim-markdown-toc GFM -->
+
+* [Introduction](#introduction)
+
+<!-- vim-markdown-toc -->
+
+## Introduction
+
+This project serves as an experiment to empirically prove whether language similarity can be assessed via a Unigram Language Model using Latent Semantic Analysis.
