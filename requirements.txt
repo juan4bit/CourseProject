@@ -1,0 +1,10 @@
+click==7.1.2
+joblib==0.17.0
+krovetz==1.0.2
+lxml==4.6.1
+nltk==3.5
+numpy==1.19.4
+pkg-resources==0.0.0
+pygtrie==2.4.1
+regex==2020.11.13
+tqdm==4.53.0
