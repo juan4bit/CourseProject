@@ -2,13 +2,11 @@ from argparse import ArgumentParser
 from bisect import insort
 from heapq import heapify, heappop
 from itertools import product
-from krovetz import PyKrovetzStemmer
 from lxml import etree
+import logging
 import math
-from nltk import word_tokenize
 import numpy as np
-from re import fullmatch
-from string import punctuation
+from scrape import tokenize_title
 
 def is_subsequence(pattern, entry):
     # If the pattern is empty then it's trivially a subsequence of any entry.
@@ -41,7 +39,7 @@ def get_title_match(query):
 
         # Check for subsequence match in case of sequential patterns.
         'test' : lambda node: is_subsequence(
-            pattern, node.find('title').text.split()
+            pattern, node.find('label').text.split()
         ),
     }
 
@@ -60,7 +58,10 @@ def get_author_match(query):
 
         # Check for subset match in case of itemset patterns.
         'test' : lambda node: pattern.issubset(
-            node.find('authors').text.split(sep=' ; ')
+            map(
+                lambda author_node: author_node.text,
+                node.findall('author')
+            )
         ),
     }
 
@@ -91,7 +92,11 @@ def cosine_sim(a, b):
             return 1
 
     # sim(a,b) = (a • b) / (|a| * |b|)
-    return np.dot(a, b) / (a_norm * b_norm)
+    sim = np.dot(a, b) / (a_norm * b_norm)
+
+    logging.debug('sim={}'.format(sim))
+
+    return sim
 
 def mutual_info(matchA, matchB, total):
     def single_probability(a):
@@ -108,6 +113,9 @@ def mutual_info(matchA, matchB, total):
 
     p_a = single_probability(a)
     p_b = single_probability(b)
+
+    logging.debug('P({})={}'.format(matchA['pattern'], p_a))
+    logging.debug('P({})={}'.format(matchB['pattern'], p_b))
 
     p_ab = [
         [
@@ -126,108 +134,81 @@ def mutual_info(matchA, matchB, total):
         ],
     ]
 
-    return sum([
+    logging.debug('P(A,B)={}'.format(p_ab))
+
+    mi = sum([
         p_ab[x][y] * math.log2(p_ab[x][y] / (p_a[x] * p_b[y]))
         for x, y in product([0, 1], [0, 1])
     ])
 
-if __name__ == '__main__':
-    parser = ArgumentParser(
-        description='Enrich patterns with semantic annotations.'
-    )
-    parser.add_argument(
-        '-a',
-        '--author_file',
-        required=True,
-        help='REQUIRED: the input file that stores the patterns for authors',
-    )
-    parser.add_argument(
-        '-t',
-        '--title_file',
-        required=True,
-        help='REQUIRED: the input file that stores the patterns for titles',
-    )
-    parser.add_argument(
-        '-q',
-        '--query',
-        required=True,
-        help='REQUIRED: the query pattern to enrich with semantic annotations',
-    )
-    parser.add_argument(
-        '--type',
-        required=True,
-        choices=['author', 'title'],
-        help='REQUIRED: the type of the query pattern',
-    )
-    parser.add_argument(
-        '-k1',
-        '--k_context',
-        type=int,
-        required=True,
-        help='REQUIRED: the number of context indicators to select',
-    )
-    parser.add_argument(
-        '-k2',
-        '--k_synonyms',
-        type=int,
-        required=True,
-        help='REQUIRED: the number of semantically similar patterns to select',
-    )
-    parser.add_argument(
-        '-k3',
-        '--k_examples',
-        type=int,
-        required=True,
-        help='REQUIRED: the number of representative transactions to select',
-    )
-    parser.add_argument(
-        'input_db',
-        help='REQUIRED: the XML input file with all the transactions',
+    logging.debug('MI={}'.format(mi))
+
+    return mi
+
+def pick_largest_k(itemList, fn, k):
+    scored_items = [
+        (-fn(item), ix, item)
+        for ix, item in enumerate(itemList)
+    ]
+
+    heapify(scored_items)
+
+    return list(
+        map(
+            lambda item: (-item[0], item[2]),
+            [heappop(scored_items) for _ in range(min(len(scored_items), k))],
+        )
     )
 
-    args = parser.parse_args()
-
+def annotate_pattern(
+        query_type,
+        query,
+        db_file,
+        title_file,
+        author_file,
+        n_context,
+        n_synonyms,
+        n_examples,
+    ):
     matches = []
     query_match = None
 
+    logging.info('Extracting patterns')
+
     # Extract the patterns from the input files.
-    if args.type == 'author':
-        query_match = get_author_match(args.query.lower())
+    if query_type == 'author':
+        query_match = get_author_match(query.lower())
     else:
-        stemmer = PyKrovetzStemmer()
-        query = ' '.join(
-            filter(
-                lambda word: not fullmatch('[' + punctuation + ']+', word),
-                map(stemmer.stem, word_tokenize(args.query))
-            )
-        )
+        query = ' '.join(tokenize_title(query))
         query_match = get_title_match(query)
 
-    with open(args.author_file, 'r') as author_file:
-        query_match = add_matches(
-            args.type == 'author',
-            author_file,
-            get_author_match,
-            matches,
-            query_match,
-        )
+    query_match = add_matches(
+        query_type == 'author',
+        author_file,
+        get_author_match,
+        matches,
+        query_match,
+    )
 
-    with open(args.title_file, 'r') as title_file:
-        query_match = add_matches(
-            args.type == 'title',
-            title_file,
-            get_title_match,
-            matches,
-            query_match,
-        )
+    query_match = add_matches(
+        query_type == 'title',
+        title_file,
+        get_title_match,
+        matches,
+        query_match,
+    )
 
-    # Match the patterns against the transaction XML database.
+    logging.info('Matching patterns against XML dataset')
+
+    # Match the patterns against the transaction XML dataset.
     def get_context():
+        db_file.seek(0)
+
         return etree.iterparse(
-            args.input_db,
+            db_file,
             dtd_validation=True,
             events=('end',),
-            tag='article',
+            tag='inproceedings',
             recover=True,
         )
 
@@ -239,76 +220,98 @@ if __name__ == '__main__':
 
         tid = tid + 1
 
+    logging.info('Calculating the context scores')
+
     # Store the weights (mutual information) of the context units in a priority
     # queue and extract the k largest patterns.
-    scored_matches = [
-        (-mutual_info(query_match, match, tid), ix, match)
-        for ix, match in enumerate(matches)
-    ]
-    heapify(scored_matches)
+    query_context = pick_largest_k(
+        matches,
+        lambda match: mutual_info(query_match, match, tid),
+        n_context,
+    )
 
-    query_context = [heappop(scored_matches) for _ in range(args.k_context)]
+    getContextUnit = lambda context: (
+        context[0],
+        {
+            'pattern': context[1]['pattern'],
+            'transactions': context[1]['transactions'],
+        },
+    )
+
+    logging.debug('Context')
+    logging.debug(list(map(getContextUnit, query_context)))
 
     # Store the context similarities (cosine similarity) of the context units in
     # a priority queue and extract the k largest patterns.
-    scored_contexts = [
-        (
-            -cosine_sim(
-                np.array([-score for score, _, _ in query_context]),
-                np.array([
-                    mutual_info(match, context_match, tid)
-                    for _, _, context_match in query_context
-                ]),
-            ),
-            ix,
-            match,
-        )
-        for ix, match in enumerate(matches)
-    ]
-    heapify(scored_contexts)
 
-    query_syn = [heappop(scored_contexts) for _ in range(args.k_synonyms)]
+    query_syn = pick_largest_k(
+        matches,
+        lambda match: cosine_sim(
+            np.array([score for score, _ in query_context]),
+            np.array([
+                mutual_info(match, context_match, tid)
+                for _, context_match in query_context
+            ]),
+        ),
+        n_synonyms,
+    )
+
+    logging.debug('Synonyms')
+    logging.debug(list(map(getContextUnit, query_syn)))
 
     # Store the representative transactions of the query pattern in a sorted
     # list with restricted size.
     tid = 0
     query_examples = []
+
     for _, node in get_context():
         insort(
             query_examples,
             (
                 -cosine_sim(
-                    np.array([-score for score, _, _ in query_context]),
+                    np.array([score for score, _ in query_context]),
+
+                    # Original paper assigns 0 to non-matching patterns and 1 to
+                    # matching patterns. I found that because Mutual Information
+                    # tends to be small, it's much better to assign -1 and 1 for
+                    # these respective cases.
                     np.array([
-                        float(context_match['test'](node))
-                        for _, _, context_match in query_context
+                        float(context_match['test'](node)) * 2 - 1
+                        for _, context_match in query_context
                     ]),
                 ),
                 tid,
                 {
-                    'title' : node.find('original-title').text,
-                    'authors' : node.find('authors').text.split(sep=' ; '),
+                    'title' : node.find('title').text,
+                    'authors' : list(
+                        map(
+                            lambda author_node: author_node.text,
+                            node.findall('author'),
+                        )
+                    ),
                 },
             ),
         )
 
-        if len(query_examples) > args.k_examples:
+        if len(query_examples) > n_examples:
             del query_examples[-1]
 
         tid = tid + 1
 
-    # Print the pattern with its semantic annotations
+    logging.debug('Examples')
+    logging.debug(query_examples)
 
+    # Print the pattern with its semantic annotations
     definition_node = etree.Element("definition")
 
     query_match['serialize'](etree.SubElement(definition_node, "pattern"))
 
     context_node = etree.SubElement(definition_node, "context")
-    for _, _, match in query_context:
+    for _, match in query_context:
         match['serialize'](etree.SubElement(context_node, "pattern"))
 
     synonyms_node = etree.SubElement(definition_node, "synonyms")
-    for _, _, match in query_syn:
+    for _, match in query_syn:
         match['serialize'](etree.SubElement(synonyms_node, "pattern"))
 
     examples_node = etree.SubElement(definition_node, "examples")
@@ -323,3 +326,95 @@ if __name__ == '__main__':
             author_node.text = author
 
     print(etree.tostring(definition_node, pretty_print=True).decode())
+
+if __name__ == '__main__':
+    parser = ArgumentParser(
+        description='Enrich patterns with semantic annotations.'
+    )
+
+    parser.add_argument(
+        '--log',
+        choices=['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'],
+        default='ERROR',
+        help='the log level (Default: ERROR)',
+    )
+    parser.add_argument(
+        '--title_file',
+        required=True,
+        help='REQUIRED: the input file that stores the patterns for titles',
+    )
+    parser.add_argument(
+        '--author_file',
+        required=True,
+        help='REQUIRED: the input file that stores the patterns for authors',
+    )
+    parser.add_argument(
+        '-q',
+        '--query',
+        required=True,
+        help='REQUIRED: the query pattern to enrich with semantic annotations',
+    )
+    parser.add_argument(
+        '--type',
+        required=True,
+        choices=['author', 'title'],
+        help='REQUIRED: the type of the query pattern',
+    )
+    parser.add_argument(
+        '-n1',
+        '--n_context',
+        type=int,
+        required=True,
+        help='REQUIRED: the number of context indicators to select',
+    )
+    parser.add_argument(
+        '-n2',
+        '--n_synonyms',
+        type=int,
+        required=True,
+        help='REQUIRED: the number of semantically similar patterns to select',
+    )
+    parser.add_argument(
+        '-n3',
+        '--n_examples',
+        type=int,
+        required=True,
+        help='REQUIRED: the number of representative transactions to select',
+    )
+    parser.add_argument(
+        'db_file',
+        help='REQUIRED: the XML input file with all the transactions',
+    )
+
+    args = parser.parse_args()
+
+    numeric_level = getattr(logging, args.log.upper(), None)
+    if not isinstance(numeric_level, int):
+        raise ValueError('Invalid log level: %s' % loglevel)
+
+    logging.basicConfig(level=numeric_level)
+
+    # Download meta-files required by the tokenizer library.
+    nltk.download('punkt')
+    nltk.download('stopwords')
+
+    db_file = open(args.db_file, 'rb')
+    title_file = open(args.title_file, 'r')
+    author_file = open(args.author_file, 'r')
+
+    try:
+        annotate_pattern(
+            args.type,
+            args.query,
+            db_file,
+            title_file,
+            author_file,
+            args.n_context,
+            args.n_synonyms,
+            args.n_examples,
+        )
+
+    finally:
+        db_file.close()
+        title_file.close()
+        author_file.close()
