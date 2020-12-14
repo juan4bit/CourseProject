@@ -41,7 +41,7 @@ cd CourseProject
 
 > Once in the project folder, install the following Python dependencies:
 ```sh
-python -m pip install -U pip wheel setuptool
+python -m pip install -U pip wheel
 ```
 
 > Optional: You may additionally want to setup a virtual environment for this project by running:
