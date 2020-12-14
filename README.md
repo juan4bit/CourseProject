@@ -276,4 +276,4 @@ title>
 
 ## Presentation
 
-You can find a recorded version of the tutorial [here](https://drive.google.com/file/d/1PmYx8yfq8m_jhEK9QStiHAKUvx0mLVvB/view?usp=sharing).
+You can find a recorded version of the tutorial [here](https://mediaspace.illinois.edu/media/t/1_lspljrhp).
