@@ -15,6 +15,7 @@
   * [Selecting DBLP inproceedings (conferences)](#selecting-dblp-inproceedings-conferences-1)
   * [Pattern extraction and compression](#pattern-extraction-and-compression-1)
   * [Semantic annotation](#semantic-annotation-1)
+* [Presentation](#presentation)
 
 <!-- vim-markdown-toc -->
 
@@ -272,3 +273,7 @@ title>
   </examples>
 </definition>
 ```
+
+## Presentation
+
+You can find a recorded version of the tutorial [here](https://drive.google.com/file/d/1PmYx8yfq8m_jhEK9QStiHAKUvx0mLVvB/view?usp=sharing).
