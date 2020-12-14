@@ -163,7 +163,7 @@ def pick_largest_k(itemList, fn, k):
 def annotate_pattern(
         query_type,
         query,
-        db_file,
+        dblp_file,
         title_file,
         author_file,
         n_context,
@@ -202,10 +202,10 @@ def annotate_pattern(
 
     # Match the patterns against the transaction XML dataset.
     def get_context():
-        db_file.seek(0)
+        dblp_file.seek(0)
 
         return etree.iterparse(
-            db_file,
+            dblp_file,
             dtd_validation=True,
             events=('end',),
             tag='inproceedings',
@@ -382,7 +382,7 @@ if __name__ == '__main__':
         help='REQUIRED: the number of representative transactions to select',
     )
     parser.add_argument(
-        'db_file',
+        'dblp_file',
         help='REQUIRED: the XML input file with all the transactions',
     )
 
@@ -395,10 +395,10 @@ if __name__ == '__main__':
     logging.basicConfig(level=numeric_level)
 
     # Download meta-files required by the tokenizer library.
-    nltk.download('punkt')
-    nltk.download('stopwords')
+    nltk.download('punkt', quite=True)
+    nltk.download('stopwords', quite=True)
 
-    db_file = open(args.db_file, 'rb')
+    dblp_file = open(args.dblp_file, 'rb')
     title_file = open(args.title_file, 'r')
     author_file = open(args.author_file, 'r')
 
@@ -406,7 +406,7 @@ if __name__ == '__main__':
         annotate_pattern(
             args.type,
             args.query,
-            db_file,
+            dblp_file,
             title_file,
             author_file,
             args.n_context,
@@ -415,6 +415,6 @@ if __name__ == '__main__':
         )
 
     finally:
-        db_file.close()
+        dblp_file.close()
         title_file.close()
         author_file.close()

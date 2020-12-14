@@ -27,7 +27,7 @@ def mine_patterns(
         output_path,
         support,
         cleanup_re,
-        db_file,
+        dblp_file,
         tag,
         jaccard_threshold,
         is_sequence,
@@ -55,7 +55,7 @@ def mine_patterns(
 
     try:
         compress_patterns(
-            db_file,
+            dblp_file,
             fp_file,
             output_file,
             tag,
@@ -72,8 +72,8 @@ def mine_patterns(
 
 def scrape_patterns(args):
     # Download meta-files required by the tokenizer library.
-    nltk.download('punkt')
-    nltk.download('stopwords')
+    nltk.download('punkt', quiet=True)
+    nltk.download('stopwords', quiet=True)
 
     dblp_file = open(args.dblp_file, 'rb')
     article_file = open(args.article_file, 'w+b')
@@ -134,7 +134,7 @@ def mine_dblp_patterns(args):
     remove(author_spmf_file.name)
 
 def annotate_pattern(args):
-    db_file = open(args.db_file, 'rb')
+    dblp_file = open(args.dblp_file, 'rb')
     title_file = open(args.title_file, 'r')
     author_file = open(args.author_file, 'r')
 
@@ -142,7 +142,7 @@ def annotate_pattern(args):
         annotate.annotate_pattern(
             args.type,
             args.query,
-            db_file,
+            dblp_file,
             title_file,
             author_file,
             args.n_context,
@@ -151,7 +151,7 @@ def annotate_pattern(args):
         )
 
     finally:
-        db_file.close()
+        dblp_file.close()
         title_file.close()
         author_file.close()
 
@@ -242,7 +242,7 @@ if __name__ == '__main__':
     )
 
     annotate_parser.add_argument(
-        '--db_file',
+        '--dblp_file',
         required=True,
         help='REQUIRED: the XML input file with all the transactions',
     )
