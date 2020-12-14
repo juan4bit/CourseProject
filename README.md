@@ -114,7 +114,7 @@ optional arguments:
 
 So you can select conferences from the DBLP dataset by running a command similar to this one:
 ```sh
-python main.py scrape ---dblp_file dblp.xml --article_file articles.xml --from_year 2010
+python main.py scrape --dblp_file dblp.xml --article_file articles.xml --from_year 2010
 ```
 
 This will read *dblp.xml*, select all inproceedings (conferences) no earlier than 2010 and print the preprocessed items in *articles.xml* in the following format:
@@ -162,7 +162,7 @@ optional arguments:
 
 So you can mine and compress patterns by running a command similar to this one:
 ```sh
-python main.py mine ---dblp_file articles.xml --title_file titles.txt --author_file authors.txt --title_support 0.003 --author-support 0.001 --title_distance 0.9 --author_distance 0.9
+python main.py mine --dblp_file articles.xml --title_file titles.txt --author_file authors.txt --title_support 0.003 --author_support 0.001 --title_distance 0.9 --author_distance 0.9
 ```
 
 This will read a **preprocessed** DBLP dataset (it assumes a **label** field exists for each *inproceedings* element which is not the case in the original DBLP file) and print to *titles.txt* and *authors.txt* the list of titles and authors respectively that were mined as frequent patterns. Title subsequences (that's what CloSpan generates) will be space separated while author itemsets will be semicolon separated. Title and author support represent the coverage percentage that a pattern needs to exhibit to be considered frequent, in this case, a title subsequence needs to show up in 0.3% of the transactions and an author itemset 0.1%. Title and author distances are the Jaccardian threshold described in the previous section, used to compress the pattern list by removing redundancy, the larger the threshold, the more agressive the compression is.
